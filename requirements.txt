@@ -1,0 +1,6 @@
+streamlit==1.67.0
+yfinance==1.8.0
+plotly==7.1.0
+pandas
+lxml
+requests

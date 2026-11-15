@@ -1,0 +1,15 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Données téléchargées (cache, régénéré automatiquement)
+data/
+
+# Configuration locale de Claude Code
+.claude/
+
+# Divers
+.DS_Store
+Thumbs.db
+.streamlit/secrets.toml
