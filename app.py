@@ -237,7 +237,8 @@ with tab_company:
     ticker = st.selectbox("Entreprise", list(labels), format_func=labels.get)
     row = screener.set_index("ticker").loc[ticker]
 
-    st.subheader(f"{row.get('longName') or row['name']}  ·  {ticker}")
+    long_name = row.get("longName")
+    st.subheader(f"{long_name if isinstance(long_name, str) else row['name']}  ·  {ticker}")
     st.caption(" · ".join(str(v) for v in [row.get("country"), row.get("sector"), row.get("industry")] if isinstance(v, str)))
 
     k = st.columns(3) + st.columns(3)

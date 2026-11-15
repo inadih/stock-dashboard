@@ -33,7 +33,8 @@ INFO_FIELDS = [
 # --------------------------------------------------------------------------- #
 def _fx_to_usd(currency: str | None, rates: dict[str, float]) -> float | None:
     """Combien de dollars vaut une unité de `currency`."""
-    if not currency:
+    # Devise absente (Yahoo n'a rien renvoyé) : pandas la représente par NaN
+    if not isinstance(currency, str) or not currency:
         return None
     if currency == "USD":
         return 1.0
@@ -48,7 +49,7 @@ def fetch_fx_rates(currencies: set[str]) -> dict[str, float]:
     wanted = {
         ("GBP" if c in ("GBp", "GBX") else c.upper())
         for c in currencies
-        if c and c != "USD"
+        if isinstance(c, str) and c and c != "USD"
     }
     rates: dict[str, float] = {}
     for cur in wanted:
@@ -72,21 +73,36 @@ def fetch_info(ticker: str, force: bool = False) -> dict:
     path = _cache_path(ticker)
     if not force and path.exists() and time.time() - path.stat().st_mtime < INFO_TTL:
         return json.loads(path.read_text(encoding="utf-8"))
+    global _consecutive_failures
     info: dict = {}
-    for attempt in range(3):
+    # Coupe-circuit : si Yahoo refuse tout depuis un moment, une seule tentative
+    attempts = 1 if _consecutive_failures >= 15 else 3
+    for attempt in range(attempts):
         try:
             raw = yf.Ticker(ticker).info or {}
             info = {k: raw.get(k) for k in INFO_FIELDS}
-            break
+            if info.get("marketCap") or info.get("longName"):
+                break
         except Exception:
-            time.sleep(1.5 * (attempt + 1))
+            pass
+        # Yahoo limite les requêtes (surtout depuis les serveurs du cloud) :
+        # on attend un peu plus à chaque nouvel essai.
+        if attempt < attempts - 1:
+            time.sleep(1.5 * 2**attempt)
+    info = {k: info.get(k) for k in INFO_FIELDS}
     info["ticker"] = ticker
     if info.get("marketCap") or info.get("longName"):
+        _consecutive_failures = 0
         path.write_text(json.dumps(info), encoding="utf-8")
+    else:
+        _consecutive_failures += 1
     return info
 
 
-def fetch_infos(tickers: list[str], progress=None, workers: int = 4) -> list[dict]:
+_consecutive_failures = 0
+
+
+def fetch_infos(tickers: list[str], progress=None, workers: int = 3) -> list[dict]:
     results: list[dict] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for i, info in enumerate(pool.map(fetch_info, tickers), start=1):
